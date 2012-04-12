@@ -57,6 +57,7 @@ require 'cgi'
 
 module Rack
   class S3
+    S3_TIMEOUT_EXCEPTIONS = [AWS::S3::S3Exception, Errno::ECONNRESET, Errno::ETIMEDOUT]
 
     def initialize(options={})
       @bucket = options[:bucket]
@@ -73,7 +74,9 @@ module Rack
     # Say great things about `_call`
     def _call(env)
       @env = env
-      [ 200, headers, object.value ]
+
+      retry_block { value = object.value }
+      [ 200, headers, value ]
     rescue AWS::S3::NoSuchKey
       not_found
     end
@@ -114,6 +117,23 @@ module Rack
         [ body ]]
     end
 
+  protected
+
+    def retry_block
+      attempts = 1
+
+      begin
+        yield
+      rescue *S3_TIMEOUT_EXCEPTIONS => e
+        if attempts < 5
+          attempts += 1
+          retry
+        else
+          raise e
+        end
+      end
+    end
+
   private
 
     # Ssshhh... this method is private. Say great things about
@@ -125,6 +145,6 @@ module Rack
         :access_key_id     => access_key_id,
         :secret_access_key => secret_access_key)
     end
-
   end
 end
+
