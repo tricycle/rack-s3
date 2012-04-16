@@ -75,7 +75,7 @@ module Rack
     def _call(env)
       @env = env
 
-      retry_block { value = object.value }
+      value = retry_block { object.value }
       [ 200, headers, value ]
     rescue AWS::S3::NoSuchKey
       not_found
